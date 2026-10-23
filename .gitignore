@@ -3,6 +3,9 @@ data/
 *.duckdb
 *.duckdb.wal
 
+# Private working notes for Claude Code (not for the public repo)
+CLAUDE.md
+
 # OS / editor noise
 .DS_Store
 Thumbs.db

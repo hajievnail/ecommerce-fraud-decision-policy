@@ -9,3 +9,7 @@
 -- Session 2: day index and train / validation / test split
 .read sql/02_split.sql
 .read sql/02_split_checks.sql
+
+-- Session 3: data quality (missing-value profile and zero-row checks)
+.read sql/03_quality.sql
+.read sql/03_quality_checks.sql

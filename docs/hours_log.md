@@ -4,6 +4,7 @@
 |---|---|---|---|---|---|
 | 1 | 2026-10-19 | Repo and load | 0.6 | Yes | All 4 load checks pass; identity coverage 24.4% (144,233 rows). Repo created and cloned on 2026-10-02 |
 | 2 | 2026-10-20 to 2026-10-23 | Split and rebuild | 1.0 | Yes | Days 1-182, no gaps; cut-offs at days 101 / 141 (60.32 / 20.12 / 19.56%); validation fraud rate higher (3.94%); full rebuild from scratch passes all 7 checks; data frozen |
+| 3 | 2026-10-23 to 2026-10-24 | Data quality | 4.0 | Yes | Build ~2 h, review ~2 h. 7 zero-row checks pass (check 6 rewritten after flip-testing); missing-value profile overall and by period; drift: M/D/V columns fill in during train, identity burst on days 15-28; missingness mostly decided by product; full rebuild 59 s |
 
 ## Plan changes
 

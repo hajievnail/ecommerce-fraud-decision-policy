@@ -13,3 +13,6 @@
 -- Session 3: data quality (missing-value profile and zero-row checks)
 .read sql/03_quality.sql
 .read sql/03_quality_checks.sql
+
+-- Session 4: exploration (train-only fraud rates) and baseline sizing
+.read sql/04_explore.sql

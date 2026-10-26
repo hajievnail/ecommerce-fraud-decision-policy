@@ -98,7 +98,7 @@ Label-free, so all periods are used. Average % empty per family:
 | id_ | 82.4 | 88.0 | 87.2 |
 
 - **Gradual fill-in during train:** `M1`-`M3`, `M7`-`M9`, `D11` and `V1`-`V11` are 58-71% empty in train but 28-40% in validation and test. Two-week blocks show a gradual fall (`D11`: ~69-74% empty in days 1-28, ~30% by days 85-98), then flat through validation and test. Not a single switch-over date. Cause unknown (masked features). Risk: a "missing" bin learned on train means something different later. Decide on Day 6/7 whether to prefer stable columns or use only the later part of train for these columns.
-- **Identity burst:** 52% of transactions in days 15-28 have identity data, vs ~15-23% elsewhere (24.4% overall). Same window as the volume spike on days 20-24. This is why `id_` columns look more empty in validation/test. The spike days differ in kind, not only in volume.
+- **Identity burst:** 52% of transactions in days 15-28 have identity data, vs 34% in days 1-14 and ~15-23% after day 28 (24.4% overall). Same window as the volume spike on days 20-24. This is why `id_` columns look more empty in validation/test. The spike days differ in kind, not only in volume.
 - Email domain becomes slightly more often empty over time (45% -> 49%).
 
 ### Missingness by product (found during the session 3 review)
@@ -115,4 +115,85 @@ Label-free, all periods:
 - Missingness is mostly decided by the product: W never has identity data or a recipient email; `D11` exists only for W.
 - So it is not "missing completely at random" (Rubin 1976; Little & Rubin, *Statistical Analysis with Missing Data*). It is mostly structural: the value does not exist for that product, rather than being unrecorded. No imputation; "missing" stays its own bin.
 - "Identity missing" is close to "product W": expect a strong overlap in the Day 7 check (missing identity x product).
-- Hypothesis, not checked: the identity burst on days 15-28 and the gradual D/M fill-in may come from changes in product mix rather than in data collection. Check (label-free) on Day 4.
+- Checked in session 4: the high identity share in days 1-28 (burst on days 15-28) is a product-mix effect; the gradual D/M fill-in is not (it happens within product W). See "Exploration" below.
+
+## Exploration (session 4, `sql/04_explore.sql`)
+
+Fraud-rate queries use the **train period only** (days 1-101; 356,216 orders, base fraud rate 3.38%). Lift = group fraud rate / 3.38%. 95% confidence intervals use rate +/- 1.96 x sqrt(p(1-p)/n); this approximation is unreliable for small groups or groups with (almost) no frauds, so such groups are only flagged, not interpreted. "Within W" comparisons control for product only, not for other variables. Bands and groupings here are for exploration; the final bins are set on Day 6.
+
+Leakage test (2026-10-26): all validation/test labels were flipped in a scratch copy of `txn_split` and the whole script re-run; the output was identical, so no query uses non-train labels.
+
+### Product mix over time (label-free, all periods)
+- **The identity burst is a product-mix effect.** Products R/H/S are 25.5% of orders in days 1-14 and 40.6% in days 15-28 (W falls to 45.8%), vs ~6-12% in every later two-week block. Among non-W orders, the share with identity stays at ~92-99% throughout.
+- **The volume spike (days 20-24, session 2) is a non-W spike.** Per day: W 2,502 orders vs 2,512 on other train days (unchanged); R/H/S 2,763 vs 494 (5.6x); C 778 vs 389 (2x). Why is unknown (products are masked).
+- **The D/M fill-in is not.** Within product W alone, `D11` goes from ~52% empty (days 1-14) to 8-25% (two-week blocks in validation/test) and `M7` from ~72% to 21-28%, while W's share stays at 76-83% after day 29. Real drift inside W; treat D/M "missing" bins with care.
+
+### Product
+| Product | Share of orders | Share of frauds | Fraud rate | Lift | Median amount | Fraud % of the product's $ |
+|---|---|---|---|---|---|---|
+| C | 11.6% | 36.8% | 10.74% | 3.18 | $31 | 11.7% |
+| S | 1.8% | 3.2% | 5.99% | 1.77 | $30 | 8.1% |
+| H | 7.5% | 9.5% | 4.27% | 1.26 | $50 | 9.7% |
+| R | 7.9% | 7.6% | 3.22% | 0.95 | $125 | 4.4% |
+| W | 71.2% | 43.0% | 2.04% | 0.60 | $79 | 2.7% |
+
+- Product shows the largest risk differences among variables that cover many orders, and it is the main confounder for the other variables. Product codes are masked, so their meaning is unknown.
+
+### Card
+- Credit 6.28% vs debit 2.30% (lift 1.86 vs 0.68). Holds within products: W 4.25% vs 1.60%, C 16.27% vs 6.92%.
+- Network: visa 3.26%, mastercard 3.56% (small difference); discover 6.15% (1.2% of orders), also high within W (6.96%). American Express never appears in W and almost never in C (2 orders); Discover never in C.
+- "debit or credit" (23 orders) and "charge card" (12) have no frauds: too small to judge.
+
+### Purchaser email domain
+- Most of the apparent differences are product C: hotmail.com 5.18% overall but 52% of its orders are C, and only 1.90% within W; outlook.com 8.44% overall, 3.07% within W.
+- ISP domains are genuinely low-risk, also within W: att.net 0.51% overall (0.64% within W), sbcglobal.net 0.37% (0.39%), verizon.net 0.63% (0.70%).
+- Missing email (2.89%) and anonymous.com (2.39%) are not risky.
+
+### Amount
+- Train amounts: median $70, 90th percentile ~$280, 99th ~$1,086, max $31,937.
+- Small amounts look risky (<$10: 8.06%) only because 89% of them are product C; within W small amounts are the safest (1.3-1.7%).
+- Within a product, risk rises with amount, then falls: W from 1.3% ($10-25) to 4.3% ($500-1,000), then 1.6% at $1,000+. This curve (plus the C confounding) is why the correlation of amount with fraud is ~0.
+- Fraud dollars sit in mid-to-high amounts: $200-1,000 orders are 16% of orders but 56% of fraud dollars (train fraud total ~$1.69M).
+
+### Relative hour of day
+- `rel_hour = floor(TransactionDT / 3600) % 24`; the real time zone is unknown, so hour 0 is not necessarily midnight.
+- Volume drops sharply around hours 7-10 (<1% of orders per hour); fraud rate peaks there (7-10%, lift 2.2-3.1) and stays high within W (3.4-4.9%). Hours 4-10 together are ~7.8% of train orders (hours 7-10 alone ~2.0%).
+
+### Identity and device
+- With identity 6.74% vs without 2.11%, but this is mostly product (W never has identity).
+- Within C, with identity 11.34% vs without 5.98%: a real extra effect. For H/R/S the no-identity groups are too small (25-119 orders).
+- Among orders with identity: mobile 9.14% vs desktop 5.43% (within C 12.74% vs 10.37%).
+
+### Distance (`dist1`, added after the session 4 audit)
+- `dist1` exists **only for product W** (100% missing in C, H, R, S; 46.9% missing within W in train), so it is analysed within W. Integers from 0 to 10,286; median 9, 90th percentile 347.
+- Within W (W rate 2.04%): short distances are slightly safer (0-20: 1.56-1.87%, lift vs W 0.76-0.91); 101-2,000 is riskier (3.13-3.15%, lift ~1.5); 2,001+ is 2.63% but rests on 1,561 orders (+/- 0.79 pp). Missing is average (2.13%).
+- Far distances (101+) are only ~8% of W orders, so the signal is modest. Median amount and credit-card share are similar across bands, so the effect is not simply amount or card type.
+- `dist2` (93% missing in train) is not explored.
+- Unlike `D11` / `M7`, `dist1` missingness within W shows no trend over time (38-54% in every two-week block).
+- What `dist1` measures is not documented in detail (masked); do not interpret it as a specific distance.
+
+### Implications for the scorecard (to decide on Days 6-7)
+- Strong candidates: product, card type, amount (binned), relative hour (grouped).
+- Weaker or tangled with product: email domain (grouped; the clear signal is the low-risk ISP domains), device type (only ~27% of train orders have it).
+- Use identity as part of a product x identity variable rather than on its own, to avoid double counting.
+- Distance (`dist1`): a modest, W-only signal (far = ~1.5x W's rate); a few bins (near / far / missing) at most.
+- Worth checking on Day 6: whether per-bin fraud rates are stable within train (early vs late train), since the first four weeks of train have a different product mix.
+- Overlap checks on Day 7: email domain x product, identity x product, amount x product.
+- Cost is driven by dollars, so later steps report fraud dollars as well as counts.
+
+## Baseline policies (session 4, chosen 2026-10-26)
+
+The scorecard policy is judged against two baselines.
+
+1. **Main baseline (used in the headline): review the largest orders.**
+   - Rule: send an order to manual review if `TransactionAmt >= X`; approve everything else; block nothing.
+   - `X` is set on **validation**: the lowest amount threshold whose daily review load fits the review capacity. This is the same capacity rule the scorecard policy must meet, so the comparison is like for like.
+   - A fixed threshold is used rather than "the K largest orders of each day", because in real time the day's largest orders are not known in advance.
+   - It uses no fraud labels; its only input is the review capacity (a cost assumption, set later and covered by sensitivity analysis).
+   - Open (decide on Day 8): what "fits capacity" means (every day, on average, or most days). The same rule applies to the baseline and the scorecard policy.
+2. **Reference: approve everything** (no screening). Shows the cost of doing nothing.
+
+Why (train sizing in `sql/04_explore.sql`, section 8):
+- Amount rules catch fraud **dollars**: the top 10% of orders by amount hold 49.4% of fraud dollars (13.9% of frauds).
+- Blocking large orders would be a poor baseline: orders over $1,000 have below-average fraud (1.7%), and the top 10% by amount include $20.6M of legitimate orders.
+- A "product C" rule catches counts (36.8% of frauds) but only 12.4% of fraud dollars, and it comes from our own exploration, so it is not a naive policy. Optional extra comparison on Day 8, not part of the headline.

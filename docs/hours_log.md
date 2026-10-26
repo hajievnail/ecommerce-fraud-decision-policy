@@ -14,3 +14,10 @@
 | 2026-10-02 | Whole schedule shifted by one day | Start moved from 2026-10-01 to 2026-10-02 |
 | 2026-10-19 | Project restarted at Day 1; sessions every other day, Day 15 (v1.0) ~2026-11-16, buffer ~2026-11-18, feedback post ~2026-11-20 | Break between 2026-10-02 and 2026-10-19 |
 | 2026-10-23 | Day 2 started a day early (2026-10-20) and was done in three short sittings, finishing 2026-10-23 | Day 1 took under an hour; Day 2 fitted around other commitments |
+
+## Ideas for after v1.0 (not planned; decide after Day 15)
+
+| Date | Idea | Note |
+|---|---|---|
+| 2026-10-26 | v1.1: one ML model (e.g. LightGBM in Python) trained on the same train period, run through the same thresholds, capacity rule and test evaluation, compared with the scorecard and the baseline | Answers "why no ML?" with a number; reuses the whole pipeline; ~2-3 sessions |
+| 2026-10-26 | Interactive online page (e.g. Streamlit) with a threshold what-if | Lower value than ML (Power BI already shows the what-if); aggregated results only, because the competition rules forbid redistributing the data |

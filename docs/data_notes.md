@@ -5,6 +5,16 @@
 - Kaggle's test files are not used: they have no fraud labels.
 - Raw files are not in the repo (see `.gitignore`); download them from the competition page into `data/raw/`.
 
+## Data use rules (competition rules, read 2026-10-26)
+- Section 7A: the data may be used for **non-commercial purposes only**, including academic research and education.
+- Section 7B: the data must not be published, redistributed or made available to anyone not participating in the competition.
+- What this project does about it (own reading of the rules, not legal advice):
+  - No raw data in the repo: `data/` and `*.duckdb` are gitignored.
+  - Only **aggregated** numbers (rates, counts, costs per day or per bin) go into committed files, the README, Excel and Power BI.
+  - Before committing an `.xlsx` or `.pbix`, check that it holds no transaction-level rows (both file types store imported data inside them).
+  - Failure analysis (Day 9) is written up as patterns and summaries, not as tables of individual transactions.
+  - Any online page would show aggregated results only.
+
 ## Load (session 1, `sql/01_load.sql`)
 - 590,540 transactions, 20,663 frauds (3.50%).
 - Identity file LEFT-joined on `TransactionID`: 144,233 transactions (24.4%) have identity data; every identity row matched a transaction.

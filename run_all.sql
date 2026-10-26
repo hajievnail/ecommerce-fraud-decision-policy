@@ -16,3 +16,7 @@
 
 -- Session 4: exploration (train-only fraud rates) and baseline sizing
 .read sql/04_explore.sql
+
+-- Session 5: card identity and point-in-time card history features
+.read sql/05_card_features.sql
+.read sql/05_card_features_checks.sql

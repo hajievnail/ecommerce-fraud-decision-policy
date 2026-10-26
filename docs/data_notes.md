@@ -207,3 +207,91 @@ Why (train sizing in `sql/04_explore.sql`, section 8):
 - Amount rules catch fraud **dollars**: the top 10% of orders by amount hold 49.4% of fraud dollars (13.9% of frauds).
 - Blocking large orders would be a poor baseline: orders over $1,000 have below-average fraud (1.7%), and the top 10% by amount include $20.6M of legitimate orders.
 - A "product C" rule catches counts (36.8% of frauds) but only 12.4% of fraud dollars, and it comes from our own exploration, so it is not a naive policy. Optional extra comparison on Day 8, not part of the headline.
+
+## Card identity and history features (session 5, `sql/05_card_features.sql`, `sql/05_card_features_checks.sql`)
+
+### Testing the `D1` idea (label-free, all periods)
+- Claim (competition discussions, via Towards Data Science "IEEE-CIS Fraud Detection: Top 5% Solution"; not a primary source): `D1` = days since the card was first used, so `day - D1` (the card's first-use day) is constant for one card.
+- `D1` facts: whole days 0-640; missing on 1,269 orders (1,208 of them in validation); 47.4% of orders have `D1 = 0`.
+- Test (our own design): group orders sharing `card1`-`card6`, `addr1` and `P_emaildomain` (2+ orders), and measure how often orders in a group share one `day - D1` value. Placebo: the same groups with `D1` shuffled at random across orders.
+
+| Orders in group | Groups | On the most common value: real / placebo | Groups with one value: real / placebo |
+|---|---|---|---|
+| 2 | 14,083 | 77.1% / 52.5% | 54.1% / 4.9% |
+| 3-5 | 14,650 | 68.7% / 30.6% | 36.3% / 0.6% |
+| 6-20 | 12,325 | 55.7% / 13.9% | 17.0% / 0.0% |
+| 21+ | 4,152 | 22.7% / 4.3% | 3.8% / 0.0% |
+
+- `day - D1` clusters far more than chance, so it carries card identity. Large groups are mixtures of several cards (e.g. one `card1` + `addr1` shared by many cards), which `day - D1` splits apart.
+- Allowing +/-1 day adds only ~0.4 pp, so an exact match is used.
+- The placebo uses `random()`, which does not reproduce exactly under parallel threads: placebo figures move by ~0.1 pp between runs. The real-vs-placebo gap is far larger.
+
+### Card ID recipe (chosen 2026-10-26)
+- `card_id = card1 | addr1 | (day - D1)`, view `txn_card`.
+- Missing `addr1` is kept as its own value `na`: 95% of product C orders have no `addr1` (under 2% elsewhere), and C is the riskiest product.
+- Missing `D1` (1,269 orders): no card ID; all history features NULL, `has_card_id = false`.
+- Not chosen: adding the email domain to the key (26% more IDs, more one-order cards, and the "email domains used before" feature could never exceed 1); adding all card fields (they are already almost constant within an ID, see below).
+- Result: 217,020 card IDs for 589,271 orders. Orders per ID: 1 (21.1% of orders), 2 (12.2%), 3-5 (21.1%), 6-20 (33.1%), 21-100 (11.6%), 101+ (0.9%).
+
+### Sanity checks (label-free)
+- Card fields not used in the key are nearly constant within an ID (IDs with 2+ orders): card4 0.00%, card3 0.03%, addr2 0.03%, card6 0.16%, card2 0.73%, card5 2.62% have more than one value. So the recipe rarely merges different cards. No ground truth exists to confirm this.
+- Among IDs with 2+ orders, email domain varies within 28.5% and product within 9.8%. Only 130 orders share their exact second with another order of the same card.
+- Largest ID: 1,414 orders, product S only, days 129-181, no email domain, one set of card fields: looks like one very heavy user rather than a merge (labels not inspected: validation/test).
+- Two no-`addr1` product C IDs used 11-12 email domains: either one card cycling emails or several merged cards.
+- IDs with no `addr1` average 3.65 orders vs 2.63 for the rest: some extra merging when a field is missing.
+- Card seen before the order: train 58.8%, validation 68.8%, test 70.1%; card seen in an earlier period: validation 42.2%, test 43.3%. History reaching back into earlier periods is allowed (those orders happened before) and uses no labels.
+
+### History features (table `card_features`, one row per order)
+Built by the table macro `card_history(max_day)`; `card_features` = `card_history(182)`.
+
+| Feature | Meaning |
+|---|---|
+| `prior_n` | earlier orders of the card |
+| `prior_n_24h`, `prior_n_7d` | earlier orders in the last 24 hours / 7 days |
+| `secs_since_prev` | seconds since the card's previous order (whole seconds: rounding to hours hid gaps under 18 s) |
+| `amt_vs_prior_avg` | amount / average of the card's earlier amounts |
+| `is_first_seen` | no earlier order of the card in the data |
+| `prior_n_email_domains` | distinct non-missing email domains used before |
+| `email_new_for_card` | card has history but never used this email domain (missing counts as a value) |
+
+- Point-in-time rule: only orders with a **strictly earlier** `TransactionDT` (`RANGE ... 1 PRECEDING`). 33,932 orders share their second with another order; same-second orders do not see each other.
+- No label is read when building the card ID or the features (the signal check below reads train labels only).
+- **Left censoring:** the data starts on day 1, so early-train cards look new because their older history is cut off. First-seen share: train 41.2%, validation 30.5%, test 29.9%; median gap since previous order: train 21.8 h, validation 95.7 h, test 93.1 h.
+
+### Leakage tests (passed 2026-10-26)
+- Zero-row checks (`sql/05_card_features_checks.sql`): one row per order; ID present exactly when `D1` is; internal consistency (24 h <= 7 d <= all, gap >= 1 s, ...); **truncation test** at day 101 and day 141 (recompute as if the data stopped that day; every earlier value must be unchanged); no label column in `txn_card` or `card_features`.
+- Brute-force check (audit): all seven features recomputed with a plain self-join (no window functions) for a 2% sample of cards (11,633 orders) matched `card_features` exactly.
+- The truncation test was shown to fail on a deliberately leaky feature ("total orders of the card"): 130,077 train rows changed, vs 0 for `prior_n`.
+- **Label-flip test** (run by hand, needs a second database): in a scratch copy every label was flipped (20,663 frauds became 569,877) and the features rebuilt; 0 rows differed from `card_features`.
+
+### Signal check (train only, sections 5-6 of the script)
+Train base rate 3.38% (3.89% for days 29-101). 95% CIs assume independent orders; orders of one card are not independent (clustering), so true uncertainty is wider.
+
+| Feature | Low-risk band | High-risk band |
+|---|---|---|
+| Time since previous order | over 7 days: 1.2% | under 1 minute: 10.6% (lift 3.1) |
+| Orders in last 24 h | none: 2.3% | 5+: 6.9% (lift 2.1) |
+| Earlier orders | first seen: 2.5% | 20+: 7.2% (lift 2.1) |
+| Email domains used before | one: 3.6% | two or more: 5.3% (lift 1.6) |
+| Amount vs card average | flat, 3.4-4.2% in every band | |
+| Email domain new for card | new: 3.1% vs used before: 4.2% (lower risk; holds within W and C, see below) | |
+
+Within product, days 29-101 (time since previous order):
+
+| Band | W (base 2.1%) | C (base 12.3%) |
+|---|---|---|
+| no previous order | 1.31% | 11.1% |
+| under 1 h | 4.89% | 12.8% |
+| 1-24 h | 3.77% | 13.9% |
+| 1-7 days | 2.66% | 14.3% |
+| over 7 days | 0.86% | 9.2% |
+
+- Recency, 24 h velocity and history length are clear, monotone signals **within W**; within C they stay close to C's base rate.
+- Part of the overall effect is product: in train days 29-101, 57.6% of C orders have an order of the same card in the previous 24 h vs 24.1% of W.
+- First seen is low-risk even after dropping days 1-28 (W: 1.31% vs 2.1%). Our reading: risk comes from a card being reused quickly; the card ID cannot link one fraudster's different cards.
+- A new email domain on a known card is lower-risk, not higher: in train days 29-101, orders with an email present, W 1.84% (new) vs 2.65% (used before), C 10.27% vs 13.37%. Unexplained; one untested guess is that new domains tend to come after long gaps, which are low-risk.
+
+### Implications (to decide on Days 6-7)
+- Day 6: keep time since previous order, 24 h count and earlier orders; likely drop amount vs average and new email domain; consider learning history points from days 29-101 only (warm-up); check how many distinct cards drive the high-risk bands (clustering).
+- Day 7: add history x product to the overlap checks (history works in W, not in C).
+- Limitations: card ID is a reconstruction (splits and merges possible, more for orders without `addr1`); history is left-censored at the start of the data.

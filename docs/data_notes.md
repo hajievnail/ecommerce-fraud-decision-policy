@@ -353,6 +353,8 @@ Bin rates are learned from **train days 29-101 only** (229,550 orders, 8,925 fra
 ### Checks (all return 0 rows, 2026-11-20)
 One binned row per order; no NULL bin in any period; every bin seen in any period has a learned rate (a deliberate removal of one bin was caught); no label column in `txn_binned`; per variable, orders and frauds in `bin_rates` add up to the window totals; every bin passes the size rule with a valid interval.
 
+Label-flip test (passed 2026-11-20, run by hand): in a scratch copy of the database every validation and test label was flipped (validation frauds 4,682 -> 114,108) and `sql/06_binning.sql` re-run; `bin_rates` was identical to the original (0 rows differ both ways), so no bin rate uses validation or test labels.
+
 ### Implications (Day 7)
 - Points from `bin_rates` (log-odds vs the window's base rate).
 - Overlap checks: product x device (device is missing for 100% of W and 3-13% of the other products in train, so these two partly measure the same thing), product x history, email x product, amount x product, time since previous x orders in 24 h.

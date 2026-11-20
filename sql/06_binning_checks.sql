@@ -5,6 +5,9 @@
 -- Label safety: the bin edges are fixed constants in 06_binning.sql, and check 4
 -- shows no label column reaches txn_binned. The history bins come from
 -- card_features, which passed its own leakage tests in session 5.
+-- The label-flip test (flip every non-train label in a scratch copy, re-run
+-- 06_binning.sql, compare bin_rates) needs a second database file, so it is run
+-- by hand and recorded in docs/data_notes.md (passed 2026-11-20).
 
 -- 1. Exactly one binned row per order
 --    Expected: 0 rows returned

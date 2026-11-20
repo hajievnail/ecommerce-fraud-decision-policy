@@ -295,3 +295,64 @@ Within product, days 29-101 (time since previous order):
 - Day 6: keep time since previous order, 24 h count and earlier orders; likely drop amount vs average and new email domain; consider learning history points from days 29-101 only (warm-up); check how many distinct cards drive the high-risk bands (clustering).
 - Day 7: add history x product to the overlap checks (history works in W, not in C).
 - Limitations: card ID is a reconstruction (splits and merges possible, more for orders without `addr1`); history is left-censored at the start of the data.
+
+## Scorecard bins (session 6, `sql/06_binning.sql`, `sql/06_binning_checks.sql`)
+
+### Variable choice (2026-11-20, train only)
+Information value (IV, Siddiqi, *Intelligent Credit Scoring*) of 15 candidates with rough first-look bins, train days 1-101: product 0.488, device type 0.381, has identity 0.34, time since previous order 0.298, card6 0.251, orders in last 24 h 0.224, dist1 0.148, email domain 0.135, earlier orders 0.098, email domains before 0.08, relative hour 0.074, new email for card 0.061, amount vs card average 0.057, amount 0.052, card4 0.009.
+
+**Kept (9):** product, amount, email domain (grouped), card6, device type, dist1, relative hour (grouped), time since previous order, orders in last 24 h.
+- Amount is kept despite its low IV: cost is driven by dollars, and amount is the baseline's variable.
+- Dropped: has identity (near-duplicate of device type: device type is missing whenever identity is, and also for 2,266 train orders that have identity, 0.6%), card4 (no signal), earlier orders (overlaps the two recency features), amount vs average and new email (weak; new email is oddly lower-risk, see session 5), email domains before (weak).
+
+### Bin rule (2026-11-20)
+Every bin needs **>= 100 frauds and >= 1% of the orders** in the learning window.
+- Why 100 frauds: the standard error of a bin's log-odds is about sqrt(1/frauds + 1/legit) (Woolf's formula; Agresti, *Categorical Data Analysis*), so 100 frauds gives ~0.10, i.e. the bin's odds known to about +/-20%.
+- Why 1% of orders: stops small high-risk niches (possibly one fraud run) from getting their own bin.
+- Merging: ordered variables with their neighbour; categories with the bin of the nearest fraud rate; missing keeps its own bin when it passes.
+
+### Final bins (44)
+| Variable | Bins |
+|---|---|
+| product | C, H, R, S, W |
+| amount | <50, 50-99, 100-199, 200-499, 500+ |
+| email domain | google; yahoo+apple; microsoft+other (hotmail/outlook/live/msn plus every rare or unseen domain); aol; anonymous; isp (26 US internet-provider domains); missing |
+| card6 | credit; debit/other/missing |
+| device type | desktop, mobile, missing |
+| dist1 | missing, 0, 1-5, 6-20, 21-100, 101-500, 501+ |
+| relative hour | 16-03, 04-05, 06-09, 10-12, 13-15 (coarse classing: neighbouring hours with similar rates) |
+| orders in last 24 h | 0 or no card ID, 1, 2-4, 5+ |
+| time since previous order | none or no card ID, <1 min, 1 min-1 h, 1 h-1 day, 1-7 days, 7+ days |
+
+- Bin edges are fixed constants (chosen on train), applied unchanged to validation and test.
+- Orders without a card ID (missing `D1`) join the "no history" bins: no history is known. Train has 6 such orders, validation 1,208, test 55.
+- Email groups are by provider (our design): yahoo.* / ymail / rocketmail are Yahoo, hotmail.* / outlook.* / live.* / msn are Microsoft, icloud / me / mac are Apple. "Other" (mail.com, web.de, gmx.de, protonmail, ...) had 589 train orders at 12.9% and joined Microsoft, the nearest rate. Apple (76 frauds in days 29-101) joined Yahoo.
+
+### Learning window: train days 29-101 (chosen 2026-11-20)
+Bin rates are learned from **train days 29-101 only** (229,550 orders, 8,925 frauds, 3.89%).
+- **Why:** days 1-28 hold a flood of mostly legitimate product H and R orders, the same product-mix effect found in session 4. H runs at 8,000-12,000 orders per two-week block at ~1.8% fraud; from day 29 it is ~900-1,700 per block at 10-18%. Order counts (label-free) show validation and test look like days 29-101, not days 1-28.
+- Learned from all of train, H would get 4.3% instead of 12.6%, R 3.2% instead of 8.3%, mobile 9.1% instead of 14.4%. The scorecard would underrate H/R/S orders in validation and test.
+- The same cut gives the history features a 28-day warm-up (left censoring, session 5).
+- Choosing the window after looking at the data is a judgment call; it used train labels only (validation/test only for order counts).
+- IV with the final bins on days 29-101: product 0.698, device 0.697, time since previous 0.389, card6 0.386, orders in 24 h 0.266, dist1 0.230, email 0.097, hour 0.076, amount 0.053.
+
+### Learned rates (table `bin_rates`, days 29-101)
+- Highest: mobile 14.4%, time since previous <1 min 14.4%, product H 12.6%, product C 12.3%, hours 06-09 10.4%, desktop 9.9%, 5+ orders in 24 h 9.2%, credit 8.8%.
+- Lowest: time since previous 7+ days 1.2%, dist1 6-20 1.6%, ISP email 1.7%, dist1 0-100 ~2.0%, product W 2.1%, device missing 2.2%.
+- 95% intervals use the Wilson interval (Wilson 1927; Agresti & Coull 1998).
+
+### Stability within the window (days 29-65 vs 66-101)
+- Lift measured against each half's own base rate (4.11% and 3.66%).
+- 41 of 44 bins change by less than 1.5x. Largest: missing email (0.64 -> 1.05), ISP email (0.34 -> 0.55), dist1 101-500 (0.67 -> 1.06). None flips from clearly risky to clearly safe. These are the bins to watch.
+- For comparison, between days 1-50 and 51-101 product H's lift moved 3.4x: that is what the learning window removes.
+
+### Clustering (history bins, days 29-101)
+- Frauds per distinct card: 1.0-2.7. "<1 min since previous": 456 frauds from 337 cards (worst card 10). "5+ orders in 24 h": 1,136 frauds from 418 cards (worst card 31).
+- No bin rests on a handful of cards. But frauds come in short runs per card, so orders are not independent and the intervals in `bin_rates` are somewhat too narrow. (Limitation.)
+
+### Checks (all return 0 rows, 2026-11-20)
+One binned row per order; no NULL bin in any period; every bin seen in any period has a learned rate (a deliberate removal of one bin was caught); no label column in `txn_binned`; per variable, orders and frauds in `bin_rates` add up to the window totals; every bin passes the size rule with a valid interval.
+
+### Implications (Day 7)
+- Points from `bin_rates` (log-odds vs the window's base rate).
+- Overlap checks: product x device (device is missing for 100% of W and 3-13% of the other products in train, so these two partly measure the same thing), product x history, email x product, amount x product, time since previous x orders in 24 h.

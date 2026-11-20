@@ -20,3 +20,7 @@
 -- Session 5: card identity and point-in-time card history features
 .read sql/05_card_features.sql
 .read sql/05_card_features_checks.sql
+
+-- Session 6: scorecard variable bins and train-only bin rates (days 29-101)
+.read sql/06_binning.sql
+.read sql/06_binning_checks.sql

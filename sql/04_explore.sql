@@ -118,7 +118,7 @@ ORDER BY card4;
 
 -- 4. Fraud rate by purchaser email domain (P_emaildomain) (TRAIN only)
 --    59 distinct domains in train. Domains with fewer than 1,000 train orders
---    are grouped as "other" (own choice, to avoid unstable rates; Day 6 sets
+--    are grouped as "other" (own choice, to avoid unstable rates; Issue 6 sets
 --    the final bins). COUNT(*) OVER (PARTITION BY ...) gives each row the size
 --    of its domain without collapsing rows.
 --    c_share_pct shows how much of each domain is product C (the riskiest product).
@@ -149,7 +149,7 @@ ORDER BY orders DESC;
 
 -- 5. Fraud rate by amount band (TRAIN only)
 --    Bands are round dollar values (own choice for exploration; train median
---    is $70, 90th percentile ~$280, 99th ~$1,086). Day 6 sets the final bins.
+--    is $70, 90th percentile ~$280, 99th ~$1,086). Issue 6 sets the final bins.
 --    share_of_fraud_usd_pct: where the fraud DOLLARS are, which drives cost.
 --    DuckDB-specific: quantile_cont with a list returns several quantiles at once.
 SELECT

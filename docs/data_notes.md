@@ -12,7 +12,7 @@
   - No raw data in the repo: `data/` and `*.duckdb` are gitignored.
   - Only **aggregated** numbers (rates, counts, costs per day or per bin) go into committed files, the README, Excel and Power BI.
   - Before committing an `.xlsx` or `.pbix`, check that it holds no transaction-level rows (both file types store imported data inside them).
-  - Failure analysis (Day 9) is written up as patterns and summaries, not as tables of individual transactions.
+  - Failure analysis (Issue 9) is written up as patterns and summaries, not as tables of individual transactions.
   - Any online page would show aggregated results only.
 
 ## Load (session 1, `sql/01_load.sql`)
@@ -88,7 +88,7 @@ All 7 checks return 0 rows on the full data:
 | V (Vesta features) | 339 | 47.3 | 86.1 |
 | id_ (identity, incl. DeviceType/DeviceInfo) | 40 | 79.2 | 99.2 |
 
-- Columns needed later are nearly complete: `D1` 0.21% empty (card identity, Day 5), `card1` 0%, `addr1` 11.1% (needs handling in the card-ID recipe).
+- Columns needed later are nearly complete: `D1` 0.21% empty (card identity, Issue 5), `card1` 0%, `addr1` 11.1% (needs handling in the card-ID recipe).
 - Identity columns are mostly empty because 75.6% of transactions have no identity record (`id_01` is empty in exactly that share), not because of bad data.
 - The 339 V columns fall into only 14 distinct null percentages, and several match a D column exactly (e.g. 12.88% ~ `D10`, 28.61% ~ `D4`, 47.29% ~ `D11`). Own observation, not verified: V columns seem to come in blocks built from the same source. Correlated blocks matter for the overlap check (Day 7).
 - For the scorecard, "missing" will be its own bin rather than a reason to drop a column.
@@ -124,7 +124,7 @@ Label-free, all periods:
 
 - Missingness is mostly decided by the product: W never has identity data or a recipient email; `D11` exists only for W.
 - So it is not "missing completely at random" (Rubin 1976; Little & Rubin, *Statistical Analysis with Missing Data*). It is mostly structural: the value does not exist for that product, rather than being unrecorded. No imputation; "missing" stays its own bin.
-- "Identity missing" is close to "product W": expect a strong overlap in the Day 7 check (missing identity x product).
+- "Identity missing" is close to "product W": expect a strong overlap in the Issue 7 check (missing identity x product).
 - Checked in session 4: the high identity share in days 1-28 (burst on days 15-28) is a product-mix effect; the gradual D/M fill-in is not (it happens within product W). See "Exploration" below.
 
 ## Exploration (session 4, `sql/04_explore.sql`)
@@ -182,13 +182,13 @@ Leakage test (2026-10-26): all validation/test labels were flipped in a scratch 
 - Unlike `D11` / `M7`, `dist1` missingness within W shows no trend over time (38-54% in every two-week block).
 - What `dist1` measures is not documented in detail (masked); do not interpret it as a specific distance.
 
-### Implications for the scorecard (to decide on Days 6-7)
+### Implications for the scorecard (to decide in Issues 6-7)
 - Strong candidates: product, card type, amount (binned), relative hour (grouped).
 - Weaker or tangled with product: email domain (grouped; the clear signal is the low-risk ISP domains), device type (only ~27% of train orders have it).
 - Use identity as part of a product x identity variable rather than on its own, to avoid double counting.
 - Distance (`dist1`): a modest, W-only signal (far = ~1.5x W's rate); a few bins (near / far / missing) at most.
-- Worth checking on Day 6: whether per-bin fraud rates are stable within train (early vs late train), since the first four weeks of train have a different product mix.
-- Overlap checks on Day 7: email domain x product, identity x product, amount x product.
+- Worth checking in Issue 6: whether per-bin fraud rates are stable within train (early vs late train), since the first four weeks of train have a different product mix.
+- Overlap checks in Issue 7: email domain x product, identity x product, amount x product.
 - Cost is driven by dollars, so later steps report fraud dollars as well as counts.
 
 ## Baseline policies (session 4, chosen 2026-10-26)
@@ -200,7 +200,7 @@ The scorecard policy is judged against two baselines.
    - `X` is set on **validation**: the lowest amount threshold whose daily review load fits the review capacity. This is the same capacity rule the scorecard policy must meet, so the comparison is like for like.
    - A fixed threshold is used rather than "the K largest orders of each day", because in real time the day's largest orders are not known in advance.
    - It uses no fraud labels; its only input is the review capacity (a cost assumption, set later and covered by sensitivity analysis).
-   - Open (decide on Day 8): what "fits capacity" means (every day, on average, or most days). The same rule applies to the baseline and the scorecard policy.
+   - Open (decide in Issue 8): what "fits capacity" means (every day, on average, or most days). The same rule applies to the baseline and the scorecard policy.
 2. **Reference: approve everything** (no screening). Shows the cost of doing nothing.
 
 Why (train sizing in `sql/04_explore.sql`, section 8):
@@ -291,9 +291,9 @@ Within product, days 29-101 (time since previous order):
 - First seen is low-risk even after dropping days 1-28 (W: 1.31% vs 2.1%). Our reading: risk comes from a card being reused quickly; the card ID cannot link one fraudster's different cards.
 - A new email domain on a known card is lower-risk, not higher: in train days 29-101, orders with an email present, W 1.84% (new) vs 2.65% (used before), C 10.27% vs 13.37%. Unexplained; one untested guess is that new domains tend to come after long gaps, which are low-risk.
 
-### Implications (to decide on Days 6-7)
-- Day 6: keep time since previous order, 24 h count and earlier orders; likely drop amount vs average and new email domain; consider learning history points from days 29-101 only (warm-up); check how many distinct cards drive the high-risk bands (clustering).
-- Day 7: add history x product to the overlap checks (history works in W, not in C).
+### Implications (to decide in Issues 6-7)
+- Issue 6: keep time since previous order, 24 h count and earlier orders; likely drop amount vs average and new email domain; consider learning history points from days 29-101 only (warm-up); check how many distinct cards drive the high-risk bands (clustering).
+- Issue 7: add history x product to the overlap checks (history works in W, not in C).
 - Limitations: card ID is a reconstruction (splits and merges possible, more for orders without `addr1`); history is left-censored at the start of the data.
 
 ## Scorecard bins (session 6, `sql/06_binning.sql`, `sql/06_binning_checks.sql`)
@@ -355,6 +355,6 @@ One binned row per order; no NULL bin in any period; every bin seen in any perio
 
 Label-flip test (passed 2026-11-20, run by hand): in a scratch copy of the database every validation and test label was flipped (validation frauds 4,682 -> 114,108) and `sql/06_binning.sql` re-run; `bin_rates` was identical to the original (0 rows differ both ways), so no bin rate uses validation or test labels.
 
-### Implications (Day 7)
+### Implications (Issue 7)
 - Points from `bin_rates` (log-odds vs the window's base rate).
 - Overlap checks: product x device (device is missing for 100% of W and 3-13% of the other products in train, so these two partly measure the same thing), product x history, email x product, amount x product, time since previous x orders in 24 h.

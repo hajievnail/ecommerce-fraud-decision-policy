@@ -170,7 +170,7 @@ FROM card_features;
 --    (1.96 * sqrt(p(1-p)/n), rough for small groups), lift = rate / train base rate.
 --    rate_after_day28 repeats the rate without the first 4 weeks of train, where
 --    every card looks "new" because the data starts on day 1 (left censoring).
---    Bands are a first look, not the Day 6 bins.
+--    Bands are a first look, not the Issue 6 bins.
 -- ---------------------------------------------------------------------------
 CREATE OR REPLACE TEMP VIEW train_hist AS
 SELECT t.isFraud, t.day, t.ProductCD, f.*

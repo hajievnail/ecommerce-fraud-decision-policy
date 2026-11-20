@@ -27,7 +27,7 @@ WHERE b_product IS NULL OR b_amount IS NULL OR b_email IS NULL OR b_card6 IS NUL
 LIMIT 20;
 
 -- 3. Every bin that occurs in ANY period has a learned rate in bin_rates
---    (otherwise a validation or test order would get no points on Day 7)
+--    (otherwise a validation or test order would get no points in Issue 7)
 --    Expected: 0 rows returned
 SELECT DISTINCT replace(u.var, 'b_', '') AS var, u.bin, 'bin has no learned rate' AS problem
 FROM (UNPIVOT (SELECT COLUMNS('^b_') FROM txn_binned) ON COLUMNS('^b_') INTO NAME var VALUE bin) AS u

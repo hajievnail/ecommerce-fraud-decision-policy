@@ -14,16 +14,17 @@
 | Date | Change | Reason |
 |---|---|---|
 | 2026-10-02 | Whole schedule shifted by one day | Start moved from 2026-10-01 to 2026-10-02 |
-| 2026-10-19 | Project restarted at Day 1; sessions every other day, Day 15 (v1.0) ~2026-11-16, buffer ~2026-11-18, feedback post ~2026-11-20 | Break between 2026-10-02 and 2026-10-19 |
-| 2026-10-23 | Day 2 started a day early (2026-10-20) and was done in three short sittings, finishing 2026-10-23 | Day 1 took under an hour; Day 2 fitted around other commitments |
+| 2026-10-19 | Project restarted at Issue 1; sessions every other day, Issue 15 (v1.0) ~2026-11-16, buffer ~2026-11-18, feedback post ~2026-11-20 | Break between 2026-10-02 and 2026-10-19 |
+| 2026-10-23 | Issue 2 started a day early (2026-10-20) and was done in three short sittings, finishing 2026-10-23 | Issue 1 took under an hour; Issue 2 fitted around other commitments |
 | 2026-10-26 | Checkpoint after session 4: on track (4 sessions, 7.6 h). The 3 h limit now applies to build work only; the learning review after each session is logged separately in the Notes column | Day 3 went to 4 h only because of the review; reviews are part of learning and should not be rushed |
 | 2026-10-26 | P1 gets a planned v1.1 after v1.0: one ML model and an online demo app (see the ideas table below) | Portfolio decision: the two main projects both show ML and a deployed demo, on different data (transactions here, text in P2) |
 | 2026-10-26 | No fixed deadline: applications now start in January 2027. Keep the session rhythm, but dates are targets, not limits | Change in the user's job-search timing |
-| 2026-11-20 | Sessions resumed after a break (2026-10-26 to 2026-11-20). A morning hands-on practice track runs alongside; remaining sessions are grouped around its milestones (Days 6-9 first, then 10-12, then 13-15). The phone-fraud NLP project (P2) is set aside, so the v1.1 note about "text in P2" no longer applies | Two-track learning plan (2026-10-26); portfolio refocused on antifraud DA roles |
+| 2026-11-20 | Sessions resumed after a break (2026-10-26 to 2026-11-20). A morning hands-on practice track runs alongside; remaining sessions are grouped around its milestones (Issues 6-9 first, then 10-12, then 13-15). The phone-fraud NLP project (P2) is set aside, so the v1.1 note about "text in P2" no longer applies | Two-track learning plan (2026-10-26); portfolio refocused on antifraud DA roles |
 
-## Ideas for after v1.0 (ML and app now planned as v1.1; details decided after Day 15)
+## Ideas for after v1.0 (ML and app now planned as v1.1; details decided after Issue 15)
 
 | Date | Idea | Note |
 |---|---|---|
 | 2026-10-26 | v1.1: one ML model (e.g. LightGBM in Python) trained on the same train period, run through the same thresholds, capacity rule and test evaluation, compared with the scorecard and the baseline | Answers "why no ML?" with a number; reuses the whole pipeline; ~2-3 sessions |
+| 2026-11-20 | v1.1 model choice left open until v1.1 starts. Flagged to consider: **isolation forest** (unsupervised anomaly detection, Liu, Ting & Zhou 2008), and comparing the **main model families used in transaction fraud**: gradient boosting (LightGBM / XGBoost / CatBoost), random forest, logistic regression as a simple reference | All run through the same split, thresholds, capacity rule and one-time test; an unsupervised model shows what can be done without labels (relevant to the selective-labels limitation; our reasoning) |
 | 2026-10-26 | Interactive online page (e.g. Streamlit) with a threshold what-if | Lower value than ML (Power BI already shows the what-if); aggregated results only, because the competition rules forbid redistributing the data |

@@ -358,3 +358,51 @@ Label-flip test (passed 2026-11-20, run by hand): in a scratch copy of the datab
 ### Implications (Issue 7)
 - Points from `bin_rates` (log-odds vs the window's base rate).
 - Overlap checks: product x device (device is missing for 100% of W and 3-13% of the other products in train, so these two partly measure the same thing), product x history, email x product, amount x product, time since previous x orders in 24 h.
+
+## Scorecard (Issue 7, `sql/07_scorecard.sql`, `sql/07_scorecard_checks.sql`, `sql/07_scorecard_overlap.sql`)
+
+### Method
+- Naive Bayes scorecard (Siddiqi, *Intelligent Credit Scoring*; ESL 6.6.3): `log_odds(order) = base_log_odds + SUM(bin log-odds - base_log_odds)` over the 9 variables.
+- `base_log_odds` is the learning window's (train days 29-101: 229,550 orders, 8,925 frauds, 3.89%), table `scorecard_base`.
+- Points (our scaling choice): `points = 500 + 50 * SUM(contribution)`. +1 in log-odds = +50 points; doubling the odds = +34.7 points. An order whose bins all sit at the base rate scores 500. The 500/50 constants are arbitrary and change nothing about the ranking.
+- `card_definition`: one row per bin (44). `txn_scored` (view): every order in every period with `points`, `score_log_odds`, `prob_fraud`, `n_parts` (always 9) and `isFraud` (kept only so Issue 8 can evaluate).
+- Points range per variable (max - min): gap 130, device 101, product 95, hour 71, card6 66, n24h 66, email 64, dist1 63, amount 32. Highest single bins: gap <1 min (571), mobile (571), product H (563), product C (562).
+
+### Score by period
+| Period | Orders | Avg points | Avg points fraud | Avg points legit | Avg `prob_fraud` | Actual fraud rate |
+|---|---|---|---|---|---|---|
+| Train | 356,216 | 462.9 | 577.4 | 458.9 | 13.8% | 3.38% |
+| Validation | 118,790 | 434.2 | 570.7 | 428.6 | 10.5% | 3.94% |
+| Test | 115,534 | 434.8 | 562.3 | 430.3 | 10.4% | 3.41% |
+
+- Fraud orders score ~130 points above legitimate ones in every period, so the ranking carries over to validation and test.
+- **`prob_fraud` is not a probability.** It averages 10-14% against a real rate of 3.4-3.9%, because summing contributions double counts correlated variables (see below). Use points only to **rank**; thresholds are chosen by empirical cost in Issue 8, never by `prob_fraud`.
+- Train averages are higher than validation/test because train includes days 1-28: average points 509.8 there (126,666 orders, 2.46% fraud) vs 437.1 in days 29-101 (229,550 orders). The H/R-heavy early mix is scored with window rates.
+
+### Overlap check (train days 29-101, `overlap_check`)
+Actual fraud rate of each joint cell (>= 200 orders) vs the rate the summed contributions imply. Orders-weighted mean of |implied / actual - 1|:
+
+| Pair | Cells | Weighted error | Share of orders where implied is >1.5x or <0.67x of actual |
+|---|---|---|---|
+| product x device | 11 | 0.66 | 98.6% |
+| gap x n24h | 12 | 0.45 | 28.4% |
+| product x email | 25 | 0.34 | 31.6% |
+| product x amount | 19 | 0.33 | 29.0% |
+| product x gap | 26 | 0.28 | 7.1% |
+
+- **product x device is the worst, as predicted in Issue 6.** Device is missing for 100% of W, so "device missing" also means "W". W + missing device: actual 2.10%, implied 1.16% (under-states). In C and R the sum over-states: C + mobile actual 14.4% vs implied 36.8%; R + desktop 4.9% vs 19.8%. The same information is counted twice.
+- **gap x n24h:** both measure card recency/velocity. "7+ days" + "0 orders in 24 h": actual 1.23%, implied 0.82%; 1m-1h gap with 1 order in 24 h: actual 5.6%, implied 10.4%.
+- product x amount: W + amount <50: actual 1.43%, implied 2.37% (small amounts are low-risk within W, high-risk only because of C; see session 4).
+- Effect: scores of orders in over-counted cells (C/R/H/S with a device record, fast repeat orders) are pushed too high relative to W orders. The ranking is still useful (fraud scores ~130 points higher), but it is not optimal.
+- Not fixed in this version: dropping device or merging product x device into one variable would be the natural next step (candidate for v1.1 or a documented limitation). Only 5 pairs were checked, not all 36.
+
+### Checks and label safety (all return 0 rows, 2026-11-23)
+`card_definition` has the same 44 bins as `bin_rates`; points equal the formula; base is 229,550 orders / 8,925 frauds; every order scored once with 9 parts and no NULL; every score lies inside the sum of per-variable min/max; no label column in `card_definition`.
+
+**Label-flip test** (run by hand, passed 2026-11-23): in a scratch copy every validation and test label was flipped (validation frauds 4,682 -> 114,108; test 3,942 -> 111,592), `06_binning.sql` and `07_scorecard.sql` were re-run; `card_definition` was identical to the original (0 rows differ both ways, 44 rows). So no point uses validation or test labels.
+
+Full rebuild from scratch (`run_all.sql` into an empty database) passes, 590,540 orders scored.
+
+### Implications (Issue 8)
+- Rank by `points`; do not use `prob_fraud`.
+- Compare against the Issue 4 baselines under the same capacity rule. Expect the scorecard's weakest part to be product C and R orders with device data (over-scored).

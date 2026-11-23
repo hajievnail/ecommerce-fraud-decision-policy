@@ -24,3 +24,8 @@
 -- Session 6: scorecard variable bins and train-only bin rates (days 29-101)
 .read sql/06_binning.sql
 .read sql/06_binning_checks.sql
+
+-- Issue 7: scorecard points, scoring view, checks, overlap check
+.read sql/07_scorecard.sql
+.read sql/07_scorecard_checks.sql
+.read sql/07_scorecard_overlap.sql

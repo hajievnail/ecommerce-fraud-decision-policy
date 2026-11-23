@@ -29,3 +29,7 @@
 .read sql/07_scorecard.sql
 .read sql/07_scorecard_checks.sql
 .read sql/07_scorecard_overlap.sql
+
+-- Issue 8: evaluation, thresholds on validation, baseline comparison, test once
+.read sql/08_evaluation.sql
+.read sql/08_evaluation_checks.sql

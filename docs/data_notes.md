@@ -406,3 +406,53 @@ Full rebuild from scratch (`run_all.sql` into an empty database) passes, 590,540
 ### Implications (Issue 8)
 - Rank by `points`; do not use `prob_fraud`.
 - Compare against the Issue 4 baselines under the same capacity rule. Expect the scorecard's weakest part to be product C and R orders with device data (over-scored).
+
+## Evaluation (Issue 8, `sql/08_evaluation.sql`, `sql/08_evaluation_checks.sql`)
+
+Thresholds are chosen on **validation only**; test is read once at the end (`policy_results`). Labels are used in this file for evaluation only.
+
+### Cost assumptions (defaults, `eval_params`; set by the AI, not yet confirmed; sensitivity is Issue 11)
+- Manual review costs $5 per order; reviewers decide correctly (a reviewed fraud is stopped, a reviewed legit order is approved).
+- A fraud that is approved loses 100% of the order amount.
+- A legit order that is blocked loses 10% of the order amount.
+- Review capacity: 1% of the period's orders per day. **"Fits capacity" = on average over the period** (closes the open question from Issue 4). The same rule is used for the baseline and the scorecard. Blocked orders do not use review capacity.
+- Orders are approved below the review threshold, reviewed between review and block thresholds, blocked at or above the block threshold. A block band may be empty.
+
+### Ranking quality (score alone, no thresholds)
+| Period | AUC | KS | Top decile: share of frauds / of fraud dollars |
+|---|---|---|---|
+| Train | 0.732 | 0.353 | 30.0% / 17.3% |
+| Validation | 0.770 | 0.415 | 36.4% / 14.9% |
+| Test | 0.753 | 0.388 | 35.3% / 16.8% |
+
+- Ranking holds on later periods (test AUC 0.753 vs train 0.732; train includes days 1-28 that the points did not learn from). The top two deciles hold 56% of test frauds but only 34% of fraud dollars: the scorecard finds fraud counts better than fraud dollars.
+
+### Baseline and chosen thresholds (validation)
+- Baseline: review orders of at least **$1,104.95** (largest ~1% of validation orders). It reviews 1,168 orders and catches 1.0% of frauds (11.8% of fraud dollars).
+- Scorecard grid: every (review, block) pair of 0.1-point buckets on validation, cheapest pair that fits capacity: **review 519.9 to 533.4, block at 533.5 and above**. Reviews 1,182 orders, **blocks 24,852 orders (20.9% of validation)**, catches 59.6% of frauds and 35.2% of fraud dollars.
+- Review-only (no block band) at the same capacity is nearly useless: 5.9% of frauds, validation cost $801,232 vs $809,192 for approve-all.
+
+### Results (total cost = review + missed fraud dollars + 10% of blocked legit dollars)
+| Period | Policy | Reviewed | Blocked | Frauds caught | Fraud $ caught | Total cost |
+|---|---|---|---|---|---|---|
+| Validation | Approve all | 0 | 0 | 0 | 0% | $809,192 |
+| Validation | Baseline | 1,168 | 0 | 1.0% | 11.8% | $719,452 |
+| Validation | Scorecard | 1,182 | 24,852 | 59.6% | 35.2% | $724,065 |
+| **Test** | Approve all | 0 | 0 | 0 | 0% | $586,652 |
+| **Test** | Baseline | 1,263 | 0 | 0.9% | 10.4% | **$532,234** |
+| **Test** | Scorecard | 1,261 | 24,738 | 58.7% | 38.2% | **$592,399** |
+
+- **Under these default costs the scorecard does not beat the baseline, and on test it is worse than approving everything** ($592,399 vs $586,652). It stops 59% of frauds but blocks about 25,000 orders (21% of all orders), and the blocked legit orders cost $224K at 10%. The baseline reviews the same number of orders but spends them on large orders, where each caught fraud is worth much more.
+- The result is driven by the cost assumptions. Before test results existed, a first validation-only run with a 2.5% false decline loss chose a very different policy (block 74% of orders, 94.7% of frauds, cost $342,693). The ranking is good; whether it pays depends on the false decline rate. This is what Issue 11 (sensitivity) must show; do not quote one cost number as a finding.
+- **Capacity rule is a mean, not a daily guarantee:** days over 1% reviewed: baseline 60% (validation) / 63% (test), scorecard 50% / 68%; worst day 1.46-2.18% of orders (`capacity_by_policy`).
+- Test fraud dollars were lower than validation ($586,652 vs $809,192 with similar order counts), so test costs are not comparable with validation costs in absolute terms.
+
+### Checks and limitations
+- 6 zero-row checks pass (`08_evaluation_checks.sql`): one action per order, both policies fit capacity on validation, policy results match direct counts, approve-all costs exactly the fraud dollars.
+- Thresholds use validation, which has a higher fraud rate (3.94% vs 3.41% in test); some of the test shortfall is this drift.
+- No block-rate cap was set; a policy blocking 21% of customers would not be acceptable in practice. A block-rate limit is a candidate rule for Issue 11.
+- Selective labels (declined or reviewed orders never show their true outcome) are not modelled: all labels are treated as known.
+- No confidence intervals on the cost differences yet (days are correlated).
+
+### Implications (Issue 9)
+- Failure analysis should explain the 41% of test frauds the scorecard misses and the largest legit orders it blocks, and test whether a block-rate cap or a higher false decline cost changes the winner.

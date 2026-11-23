@@ -33,3 +33,7 @@
 -- Issue 8: evaluation, thresholds on validation, baseline comparison, test once
 .read sql/08_evaluation.sql
 .read sql/08_evaluation_checks.sql
+
+-- Issue 9: failure analysis, missed frauds, false blocks, freeze
+.read sql/09_failure.sql
+.read sql/09_failure_checks.sql

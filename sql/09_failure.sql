@@ -1,8 +1,10 @@
 -- 09_failure.sql
 -- Issue 9: Failure analysis — missed frauds (test), false blocks (test), summary marts, numbers freeze.
--- Needs: txn_scored (view, 07_scorecard.sql), txn_binned (view, 06_binning.sql).
+-- Needs: txn_scored (07), txn_binned (06), best_thresholds (08).
+-- 'Missed' fraud = test fraud the scorecard approved (no review, no block). Frauds sent to review count as caught, as in Issue 8.
 
-CREATE OR REPLACE TABLE fail_params AS SELECT 519.9 AS review_threshold, 533.5 AS block_threshold;
+-- Thresholds come from Issue 8 (chosen on validation), not typed by hand.
+CREATE OR REPLACE TABLE fail_params AS SELECT review_threshold, block_threshold FROM best_thresholds;
 
 CREATE OR REPLACE TABLE fail_baseline_amount AS
 SELECT min(amt) AS amount_threshold FROM (
@@ -26,7 +28,7 @@ CREATE OR REPLACE TABLE fail_missed_top AS
 SELECT f.TransactionID, f.day, f.TransactionAmt, round(f.points, 1) AS points,
        t.b_product, t.b_amount, t.b_email, t.b_card6, t.b_device, t.b_dist1, t.b_hour, t.b_n24h, t.b_gap
 FROM fail_actions_test f JOIN txn_binned t USING (TransactionID)
-WHERE f.isFraud = 1 AND f.score_action <> 'block'
+WHERE f.isFraud = 1 AND f.score_action = 'approve'
 ORDER BY f.TransactionAmt DESC
 LIMIT 20;
 
@@ -44,28 +46,28 @@ SELECT 'product' AS var, t.b_product AS bin,
        round(100.0 * count(*) / NULLIF(sum(count(*)) OVER (), 0), 1) AS pct_of_missed,
        round(100.0 * sum(f.TransactionAmt) / NULLIF(sum(sum(f.TransactionAmt)) OVER (), 0), 1) AS pct_of_missed_usd
 FROM fail_actions_test f JOIN txn_binned t USING (TransactionID)
-WHERE f.isFraud = 1 AND f.score_action <> 'block'
+WHERE f.isFraud = 1 AND f.score_action = 'approve'
 GROUP BY t.b_product
 UNION ALL
 SELECT 'amount', t.b_amount, count(*), sum(f.TransactionAmt),
        round(100.0 * count(*) / NULLIF(sum(count(*)) OVER (), 0), 1),
        round(100.0 * sum(f.TransactionAmt) / NULLIF(sum(sum(f.TransactionAmt)) OVER (), 0), 1)
 FROM fail_actions_test f JOIN txn_binned t USING (TransactionID)
-WHERE f.isFraud = 1 AND f.score_action <> 'block'
+WHERE f.isFraud = 1 AND f.score_action = 'approve'
 GROUP BY t.b_amount
 UNION ALL
 SELECT 'device', t.b_device, count(*), sum(f.TransactionAmt),
        round(100.0 * count(*) / NULLIF(sum(count(*)) OVER (), 0), 1),
        round(100.0 * sum(f.TransactionAmt) / NULLIF(sum(sum(f.TransactionAmt)) OVER (), 0), 1)
 FROM fail_actions_test f JOIN txn_binned t USING (TransactionID)
-WHERE f.isFraud = 1 AND f.score_action <> 'block'
+WHERE f.isFraud = 1 AND f.score_action = 'approve'
 GROUP BY t.b_device
 UNION ALL
 SELECT 'gap', t.b_gap, count(*), sum(f.TransactionAmt),
        round(100.0 * count(*) / NULLIF(sum(count(*)) OVER (), 0), 1),
        round(100.0 * sum(f.TransactionAmt) / NULLIF(sum(sum(f.TransactionAmt)) OVER (), 0), 1)
 FROM fail_actions_test f JOIN txn_binned t USING (TransactionID)
-WHERE f.isFraud = 1 AND f.score_action <> 'block'
+WHERE f.isFraud = 1 AND f.score_action = 'approve'
 GROUP BY t.b_gap;
 
 CREATE OR REPLACE TABLE fail_false_by_var AS
@@ -94,8 +96,8 @@ GROUP BY t.b_device;
 CREATE OR REPLACE TABLE fail_product_device AS
 SELECT t.b_product, t.b_device,
        count(*) AS orders, sum(f.isFraud) AS frauds,
-       sum(CASE WHEN f.isFraud = 1 AND f.score_action <> 'block' THEN 1 ELSE 0 END) AS missed,
-       sum(CASE WHEN f.isFraud = 1 AND f.score_action <> 'block' THEN f.TransactionAmt ELSE 0 END) AS missed_usd,
+       sum(CASE WHEN f.isFraud = 1 AND f.score_action = 'approve' THEN 1 ELSE 0 END) AS missed,
+       sum(CASE WHEN f.isFraud = 1 AND f.score_action = 'approve' THEN f.TransactionAmt ELSE 0 END) AS missed_usd,
        sum(CASE WHEN f.isFraud = 0 AND f.score_action = 'block' THEN 1 ELSE 0 END) AS false_blocks,
        sum(CASE WHEN f.isFraud = 0 AND f.score_action = 'block' THEN f.TransactionAmt ELSE 0 END) AS false_blocked_usd
 FROM fail_actions_test f JOIN txn_binned t USING (TransactionID)
@@ -105,8 +107,8 @@ ORDER BY t.b_product, t.b_device;
 CREATE OR REPLACE TABLE fail_amount_device AS
 SELECT t.b_amount, t.b_device,
        count(*) AS orders,
-       sum(CASE WHEN f.isFraud = 1 AND f.score_action <> 'block' THEN 1 ELSE 0 END) AS missed,
-       sum(CASE WHEN f.isFraud = 1 AND f.score_action <> 'block' THEN f.TransactionAmt ELSE 0 END) AS missed_usd,
+       sum(CASE WHEN f.isFraud = 1 AND f.score_action = 'approve' THEN 1 ELSE 0 END) AS missed,
+       sum(CASE WHEN f.isFraud = 1 AND f.score_action = 'approve' THEN f.TransactionAmt ELSE 0 END) AS missed_usd,
        sum(CASE WHEN f.isFraud = 0 AND f.score_action = 'block' THEN 1 ELSE 0 END) AS false_blocks,
        sum(CASE WHEN f.isFraud = 0 AND f.score_action = 'block' THEN f.TransactionAmt ELSE 0 END) AS false_blocked_usd
 FROM fail_actions_test f JOIN txn_binned t USING (TransactionID)

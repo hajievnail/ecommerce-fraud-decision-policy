@@ -456,3 +456,51 @@ Thresholds are chosen on **validation only**; test is read once at the end (`pol
 
 ### Implications (Issue 9)
 - Failure analysis should explain the 41% of test frauds the scorecard misses and the largest legit orders it blocks, and test whether a block-rate cap or a higher false decline cost changes the winner.
+
+## Failure analysis (Issue 9, `sql/09_failure.sql`, `sql/09_failure_export.sql`, `sql/09_failure_checks.sql`)
+
+Test period only, thresholds from Issue 8 (`best_thresholds`: review 519.9 to 533.4, block at 533.5 and above), no new fitting. "Missed fraud" = a test fraud the scorecard **approved** (frauds sent to review count as caught, as in Issue 8). "False block" = a legit order blocked. Transaction-level lists (`fail_missed_top`, `fail_false_blocks_top`, 20 rows each) stay in the database only; only aggregates are written up and exported (data rules above).
+
+### Frozen test numbers (table `fail_freeze`, CSV `excel/inputs/fail_freeze.csv`)
+| Orders | Frauds | Reviewed | Blocked | Frauds caught | Frauds missed | Fraud $ missed | False blocks | Legit $ blocked |
+|---|---|---|---|---|---|---|---|---|
+| 115,534 | 3,942 (3.41%) | 1,261 | 24,738 | 2,312 (58.7%) | 1,630 (41.4%) | $362,312 | 22,473 | $2,237,819 |
+
+These match `policy_results` (Issue 8) exactly.
+
+### Missed frauds (1,630)
+- **98.8% are product W (1,610), and 99.8% have no device type.** Device is missing for 100% of W, so these orders get the "device missing" points (low) and nothing else pushes them up. This is the product x device overlap found in Issue 7: W + missing device actual 2.10% vs implied 1.16%.
+- They are not the big-dollar frauds: only 28 of them are at or above the baseline's $1,104.95. By amount: 500+ is 12.1% of the missed count but 51.3% of the missed dollars; under $100 is 45.8% of the count and 11.8% of the dollars.
+- Their average score is 411 points, far below the block line (533.5). They are not near-misses: the scorecard sees them as ordinary W orders. Nothing in the 9 variables separates them.
+- The 20 biggest missed frauds are all product W, $1,385 to $3,133 ($37,165 together), average 431 points.
+- Gap since previous order does not explain them: they are spread over all gap bins (only 1.2% in "<1 min", which is where the scorecard works).
+
+### False blocks (22,473)
+- By count: product C 44.0%, R 21.2%, S 13.4%, H 13.2%, W 8.3%. By dollars: R 31.9%, W 30.5%, C 17.1%. Blocks of C orders are many but small; blocks of R and W orders are fewer but expensive.
+- By amount: 44.5% of false blocks are under $50 (10.8% of the dollars); $200+ is 12.2% of the count but 48.1% of the dollars.
+- Device: desktop 52.3%, mobile 36.4%, missing 11.3% (32.5% of the dollars).
+- The 20 biggest false blocks are all product W, $2,595 to $4,426 ($64,883 together), average 563 points. Large W orders that look high-risk on amount, hour or history get blocked.
+
+### Product x device (test)
+- W + missing device: 91,578 orders, 1,737 frauds, 1,610 missed (93% of its frauds), 1,857 false blocks.
+- Product C: 11,863 orders, 1,573 frauds, 9 missed, and 9,880 false blocks (96.0% of C legit orders). The scorecard catches almost every C fraud only by blocking almost every C order.
+- Same pattern in H, R, S: 96.6%, 93.1%, 91.9% of legit orders blocked. With device data (desktop or mobile) the share is 93-99.5%; with device missing it is 28-65%. Over C/R/S/H together, 94.8% of legit orders are blocked, against 2.1% in W.
+
+### What this shows
+- The scorecard splits the data into two regimes: product W (no device), where it is blind, and products C/R/S/H (device present), where it blocks almost everything. The overall AUC of 0.75 mostly reflects this product split, not fine ranking inside either group. (Own reading; not tested by a within-product AUC. Candidate check for Issue 11 or later.)
+- Fraud in W is 1.9% of W orders in test and the scorecard cannot find it. A model built per product, or with extra W variables (e.g. `dist1`, card features, more history), would be the natural next step. Not done in this project.
+- Together with Issue 8 this explains why the scorecard loses to the baseline under default costs: 21% of orders blocked, most of them legit C/R/S/H orders.
+
+### Corrected during review
+- The first version counted frauds sent to review as "missed" in the by-variable tables (1,677 instead of 1,630) and hard-coded the thresholds. Fixed: filter is now `score_action = 'approve'` and thresholds are read from `best_thresholds`. New checks 6-9 compare the tables with the freeze and with Issue 8.
+
+### Export (`excel/inputs/`, aggregates only)
+`eval_params`, `best_thresholds`, `policy_results`, `score_quality`, `score_cum` (cumulative counts and dollars by 0.1-point score bucket and period, for the Issue 10 cost model), `fail_freeze`, `fail_missed_by_var`, `fail_false_by_var`, `fail_product_device`, `fail_amount_device`.
+
+### Checks
+9 zero-row checks pass (`sql/09_failure_checks.sql`). Full rebuild from scratch passes.
+
+### Implications (Issues 10-12)
+- Excel cost model should take costs as inputs and use `score_cum` to recompute the best thresholds; sensitivity (Issue 11) must vary the false decline cost and add a block-rate cap.
+- Numbers frozen: no further changes to the scorecard, thresholds or test results.
+

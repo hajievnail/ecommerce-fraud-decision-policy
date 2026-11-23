@@ -1,0 +1,2 @@
+orders,frauds,fraud_rate_pct,total_usd,blocked,reviewed,frauds_caught,frauds_missed,fraud_usd_missed,false_blocks,false_blocked_usd
+115534,3942,3.41,15843315.630990328,24738,1261,2312,1630,362312.0430000017,22473,2237818.9889999838

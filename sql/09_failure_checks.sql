@@ -3,7 +3,7 @@
 
 SELECT 'check 1: wrong missed fraud' AS info, f.TransactionID
 FROM fail_missed_top f JOIN fail_actions_test a USING (TransactionID)
-WHERE a.isFraud = 0 OR a.score_action = 'block';
+WHERE a.isFraud = 0 OR a.score_action <> 'approve';
 
 SELECT 'check 2: wrong false block' AS info, f.TransactionID
 FROM fail_false_blocks_top f JOIN fail_actions_test a USING (TransactionID)
@@ -11,7 +11,8 @@ WHERE a.isFraud = 1 OR a.score_action <> 'block';
 
 SELECT 'check 3: missing test txns' AS info, count(*)
 FROM txn_scored s LEFT JOIN fail_actions_test a USING (TransactionID)
-WHERE a.TransactionID IS NULL AND s.period = 'test';
+WHERE a.TransactionID IS NULL AND s.period = 'test'
+HAVING count(*) > 0;
 
 SELECT 'check 4: frauds dont add up' AS info
 FROM (SELECT sum(isFraud) AS total,
@@ -29,3 +30,24 @@ FROM (SELECT count(*) AS orders, sum(isFraud) AS frauds,
 JOIN fail_freeze b ON a.orders <> b.orders OR a.frauds <> b.frauds
                    OR a.blocked <> b.blocked OR a.caught <> b.frauds_caught
                    OR a.false_b <> b.false_blocks;
+
+SELECT 'check 6: by-variable tables do not add up' AS info, v.var
+FROM (SELECT var, sum(n) AS n FROM fail_missed_by_var GROUP BY var) v, fail_freeze z
+WHERE v.n <> z.frauds_missed
+UNION ALL
+SELECT 'check 6: false-block tables do not add up', v.var
+FROM (SELECT var, sum(n) AS n FROM fail_false_by_var GROUP BY var) v, fail_freeze z
+WHERE v.n <> z.false_blocks;
+
+SELECT 'check 7: actions differ from Issue 8' AS info, count(*)
+FROM fail_actions_test f JOIN txn_actions a USING (TransactionID)
+WHERE f.score_action <> a.score_action
+HAVING count(*) > 0;
+
+SELECT 'check 8: product x device does not add up' AS info
+FROM (SELECT sum(missed) AS m, sum(false_blocks) AS fb FROM fail_product_device) p, fail_freeze z
+WHERE p.m <> z.frauds_missed OR p.fb <> z.false_blocks;
+
+SELECT 'check 9: exported freeze differs from table' AS info
+FROM read_csv('excel/inputs/fail_freeze.csv') c, fail_freeze z
+WHERE c.orders <> z.orders OR c.frauds_missed <> z.frauds_missed OR c.false_blocks <> z.false_blocks;

@@ -1,0 +1,4 @@
+period,auc,ks
+test,0.753,0.3877
+train,0.7324,0.3527
+validation,0.7704,0.4154

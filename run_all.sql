@@ -36,4 +36,5 @@
 
 -- Issue 9: failure analysis, missed frauds, false blocks, freeze
 .read sql/09_failure.sql
+.read sql/09_failure_export.sql
 .read sql/09_failure_checks.sql

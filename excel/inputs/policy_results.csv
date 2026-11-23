@@ -1,0 +1,7 @@
+period,policy,orders,reviewed,blocked,pct_reviewed,frauds_caught,pct_frauds_caught,pct_fraud_usd_caught,fraud_usd_missed,legit_usd_blocked,total_cost
+test,approve all,115534,0,0,0.0,0,0.0,0.0,586652.0,0.0,586652.0
+test,baseline (largest orders),115534,1263,0,1.093,35,0.9,10.4,525919.0,0.0,532234.0
+test,scorecard,115534,1261,24738,1.091,2312,58.7,38.2,362312.0,2237819.0,592399.0
+validation,approve all,118790,0,0,0.0,0,0.0,0.0,809192.0,0.0,809192.0
+validation,baseline (largest orders),118790,1168,0,0.983,49,1.0,11.8,713612.0,0.0,719452.0
+validation,scorecard,118790,1182,24852,0.995,2791,59.6,35.2,524038.0,1941175.0,724065.0

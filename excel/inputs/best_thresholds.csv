@@ -1,0 +1,2 @@
+review_b,block_b,review_threshold,block_threshold,reviewed,blocked,pct_reviewed,pct_frauds_caught,pct_fraud_usd_caught,total_cost,block_b_used
+5199,5335,519.9,533.5,1182,24852,0.995,59.6,35.2,724065.0,5335
